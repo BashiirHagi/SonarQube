@@ -1,0 +1,40 @@
+parameters:
+  projectKey: 'com.myproject.scanner'
+  projectName: 'mysonarqubeproject'
+  projectVersion: '1.0'
+  sonarLoggingLevel: 'info'
+  sonarProfile: 'Sonar way'
+  sonarScanningMode: 'MSBuild'
+  sonarServiceConnection: 'sonarqube-service-connection'
+  sonarSources: '.'
+  additionalArgs: ''
+
+steps:
+  - script: |
+      if [ ! -f ./sonar-project.properties ]; then
+      echo 'sonar-project.properties file does not exist, creating...'
+        cat <<EOF > ./sonar-project.properties
+      sonar.projectKey=${{ parameters.projectKey }}
+      sonar.projectName=${{ parameters.projectName }}
+      sonar.projectVersion=${{ parameters.projectVersion }}
+      sonar.profile=${{ parameters.sonarProfile }}
+      sonar.sources=${{ parameters.sonarSources }}
+      sonar.log.level=${{ parameters.sonarLoggingLevel }}
+      ${{ parameters.additionalArgs }}
+      EOF
+      else
+        echo 'sonar-project.properties file already exists, using pre-configured file...'
+      fi
+      cat ./sonar-project.properties
+    displayName: Sonarqube - Ensure properties file exists
+
+  - task: SonarQubePrepare@4
+    inputs:
+      SonarQube: ${{ parameters.sonarServiceConnection }}
+      scannerMode: ${{ parameters.sonarScanningMode }}
+      configMode: 'file'
+      projectKey: ${{ parameters.projectKey }}
+      configFile: 'sonar-project.properties'
+    env:
+      NODE_EXTRA_CA_CERTS: /opt/certs/sonarqube_bundle.crt
+    displayName: Sonarqube - Prepare

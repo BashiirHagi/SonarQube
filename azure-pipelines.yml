@@ -1,0 +1,111 @@
+# Read me
+# This pipeline is used to manage templates versioning by using git tags.
+# It will automatically assign git tag for main branch,
+# but also supports forceSetGitTag parameter with default value to false,
+# in case there is a reason to set tag from feature branch.
+# major and minor versions should be incremented manually from this file
+pool:
+  name: 'Fleet_Falcon Linux VM Pool'
+
+pr:
+  autoCancel: true
+  branches:
+    include:
+      - main
+
+resources:
+  repositories:
+    - repository: AdsTemplatesSecurity
+      type: git
+      name: DevOps-SRE/ads-ado-templates-security
+      ref: refs/tags/2.x
+      endpoint: ADS_ADO_Template_Access
+    - repository: dses-sec-templates
+      type: git
+      name: DS-DSES/dses-sec-templates
+      endpoint: DSES_SEC_Template_Access
+    - repository: coss-templates
+      type: git
+      name: Vulnerability_Identification_and_Awareness/coss-templates
+
+trigger:
+  batch: true
+  branches:
+    include:
+      - main
+
+parameters:
+  - name: forceSetGitTag
+    displayName: 'Force Set Git Tag'
+    type: boolean
+    default: false
+  - name: pushDockerImage
+    displayName: 'Push Docker Image to PreProd AWS ECR'
+    type: boolean
+    default: false
+
+variables:
+  - template: templates/variables/build-variables.yml
+  - name: BuildNumberSubString
+    ${{ if eq(variables['Build.Reason'], 'PullRequest') }}:
+      value: .PR_
+    ${{ if ne(variables['Build.Reason'], 'PullRequest') }}:
+      value: _
+  - name: majorVersion
+    ${{ if eq(variables['Build.Reason'], 'PullRequest') }}:
+      value: 0
+    ${{ if ne(variables['Build.Reason'], 'PullRequest') }}:
+      value: 1
+  - name: minorVersion
+    value: '0'
+  - name: awsRepositoryName
+    value: 'falcon_sample'
+
+name: $(Build.DefinitionName)$(BuildNumberSubString)$(majorVersion).$(minorVersion).$(Rev:r)
+
+stages:
+  - stage: TestBuild
+    displayName: 'Test Solution Build'
+    jobs:
+      - job: 'Build'
+        displayName: 'Solution Build'
+        steps:
+          - template: templates/build.yml
+            parameters:
+              majorVersion: ${{ variables['majorVersion'] }}
+              minorVersion: ${{ variables['minorVersion'] }}
+              isFunctionalSpecsRequired: false
+              # sonarSources must point to where the solution file is for dotnet applications
+              # For most applications this is in the root of the repository (which is the default value)
+              sonarSources: ./sample/DotnetSampleApi/
+          - template: templates/publish-package.yml
+            parameters:
+              projectNames:
+                - 'TestLibrary'
+          - template: templates/set-git-tag.yml
+            parameters:
+              forceSetGitTag: ${{ parameters.forceSetGitTag }}
+          - template: templates/clean-up.yml
+
+  - stage: TestDockerBuild
+    displayName: 'Test Docker Build'
+    dependsOn:
+      - TestBuild
+    jobs:
+      - job: DockerBuild
+        displayName: 'Docker Image Build and Push'
+        pool: # This will change once the falcon build pool has mono installed.
+          vmImage: ubuntu-20.04
+        steps:
+          - template: templates/docker/build-image.yml
+            parameters:
+              awsRepositoryName: '$(awsRepositoryName)'
+              dockerFilePath: '**/sample/DotnetSampleApi/**/Dockerfile'
+              dockerBuildContext: '$(System.DefaultWorkingDirectory)/sample/DotnetSampleApi'
+              nugetConfigFile: '$(System.DefaultWorkingDirectory)/sample/DotnetSampleApi/nuget.config'
+          - template: templates/docker/push-image.yml
+            parameters:
+              awsRepositoryName: '$(awsRepositoryName)'
+              pushDockerImage: ${{ parameters.pushDockerImage }}
+              continueOnPushError: true
+          - template: templates/docker/clean-up.yml

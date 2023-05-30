@@ -1,0 +1,27 @@
+parameters:
+  sonarPollingTimeout: 300
+  sonarPublish: true
+  sonarServiceConnection: 'sonarqube-service-connection'
+  sonarBuildBreaker: true
+
+steps:
+  - task: SonarQubeAnalyze@4
+    displayName: Sonarqube - Analyse
+    env:
+      NODE_EXTRA_CA_CERTS: /opt/certs/sonarqube_bundle.crt
+
+  - ${{ if eq(parameters.sonarPublish, true) }}:
+      - task: SonarQubePublish@4
+        inputs:
+          pollingTimeoutSec: ${{ parameters.sonarPollingTimeout }}
+        env:
+          NODE_EXTRA_CA_CERTS: /opt/certs/sonarqube_bundle.crt
+        displayName: Sonarqube - Publish
+
+  - ${{ if eq(parameters.sonarBuildBreaker, true) }}:
+      - task: sonar-buildbreaker@8
+        inputs:
+          SonarQube: ${{ parameters.sonarServiceConnection }}
+        env:
+          NODE_EXTRA_CA_CERTS: /opt/certs/sonarqube_bundle.crt
+        displayName: Sonarqube - Okay

@@ -5,7 +5,7 @@
 # in case there is a reason to set tag from feature branch.
 # major and minor versions should be incremented manually from this file
 pool:
-  name: 'Fleet_Falcon Linux VM Pool'
+  name: 'Falcon Linux VM Pool'
 
 pr:
   autoCancel: true

@@ -1,0 +1,91 @@
+parameters:
+  - name: buildConfig
+    default: Release
+  - name: majorVersion
+    default: '0'
+  - name: minorVersion
+    default: '0'
+  - name: unitTestsProjectSearchPattern
+    default: '**/Unit.Tests.csproj'
+  - name: functionalSpecsProjectSearchPattern
+    default: '**/Functional.Specs.csproj'
+  - name: isFunctionalSpecsRequired
+    type: boolean
+    default: true
+  - name: isCodeCoverageRequired
+    type: boolean
+    default: true
+  - name: canSASTScanExecute
+    type: boolean
+    default: true
+  - name: canSCAScanExecute
+    type: boolean
+    default: true
+  - name: canSonarqubeExecute
+    type: boolean
+    default: true
+  - name: sonarScanningMode
+    type: string
+    default: 'MSBuild'
+  - name: sonarBuildBreaker
+    type: boolean
+    default: true
+  - name: sonarSources
+    type: string
+    default: '.'
+
+steps:
+  - checkout: self
+    persistCredentials: 'true'
+
+  - task: NuGetAuthenticate@0
+    displayName: 'NuGet Authenticate'
+
+  - template: set-version.yml
+
+  - ${{ if eq(parameters.canSASTScanExecute, true) }}:
+      - template: code-scanning/checkmarx-sast-scan.yml
+
+  - task: UseDotNet@2
+    displayName: 'Use .NET Core SDK'
+    inputs:
+      packageType: sdk
+      version: 6.0.401
+      installationPath: $(Agent.ToolsDirectory)/dotnet
+
+  - task: DotNetCoreCLI@2
+    displayName: Restore
+    inputs:
+      command: 'restore'
+      projects: '**/*.csproj'
+      feedsToUse: 'select'
+      vstsFeed: '$(FalconPackagesFeed)'
+
+  - ${{ if eq(parameters.canSonarqubeExecute, true) }}:
+      - template: code-scanning/sonarqube-prepare.yml
+        parameters:
+          sonarScanningMode: ${{ parameters.sonarScanningMode }}
+          sonarSources: ${{ parameters.sonarSources }}
+
+  - task: DotNetCoreCLI@2
+    displayName: 'Build - ${{ parameters.buildConfig }}'
+    inputs:
+      command: build
+      projects: '**/*.csproj'
+      arguments: '--configuration ${{ parameters.buildConfig }} /p:TreatWarningsAsErrors=true /p:Version=$(currentVersion)'
+
+  - template: run-tests.yml
+    parameters:
+      buildConfig: ${{ parameters.buildConfig }}
+      unitTestsProjectSearchPattern: '${{ parameters.unitTestsProjectSearchPattern }}'
+      functionalSpecsProjectSearchPattern: '${{ parameters.functionalSpecsProjectSearchPattern }}'
+      isFunctionalSpecsRequired: ${{ parameters.isFunctionalSpecsRequired }}
+      isCodeCoverageRequired: ${{ parameters.isCodeCoverageRequired }}
+
+  - ${{ if eq(parameters.canSonarqubeExecute, true) }}:
+      - template: code-scanning/sonarqube-scan.yml
+        parameters:
+          sonarBuildBreaker: ${{ parameters.sonarBuildBreaker }}
+
+  - ${{ if eq(parameters.canSCAScanExecute, true) }}:
+      - template: code-scanning/checkmarx-sca-scan.yml

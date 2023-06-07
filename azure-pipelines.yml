@@ -1,32 +1,11 @@
-# Read me
-# This pipeline is used to manage templates versioning by using git tags.
-# It will automatically assign git tag for main branch,
-# but also supports forceSetGitTag parameter with default value to false,
-# in case there is a reason to set tag from feature branch.
-# major and minor versions should be incremented manually from this file
 pool:
-  name: 'Falcon Linux VM Pool'
+  name: ' Hawk Linux VM Pool'
 
 pr:
   autoCancel: true
   branches:
     include:
       - main
-
-resources:
-  repositories:
-    - repository: AdsTemplatesSecurity
-      type: git
-      name: DevOps-SRE/ads-ado-templates-security
-      ref: refs/tags/2.x
-      endpoint: ADS_ADO_Template_Access
-    - repository: dses-sec-templates
-      type: git
-      name: DS-DSES/dses-sec-templates
-      endpoint: DSES_SEC_Template_Access
-    - repository: coss-templates
-      type: git
-      name: Vulnerability_Identification_and_Awareness/coss-templates
 
 trigger:
   batch: true
@@ -59,7 +38,7 @@ variables:
   - name: minorVersion
     value: '0'
   - name: awsRepositoryName
-    value: 'falcon_sample'
+    value: 'sample'
 
 name: $(Build.DefinitionName)$(BuildNumberSubString)$(majorVersion).$(minorVersion).$(Rev:r)
 
@@ -94,7 +73,7 @@ stages:
     jobs:
       - job: DockerBuild
         displayName: 'Docker Image Build and Push'
-        pool: # This will change once the falcon build pool has mono installed.
+        pool: # This will change once the build pool has mono installed.
           vmImage: ubuntu-20.04
         steps:
           - template: templates/docker/build-image.yml

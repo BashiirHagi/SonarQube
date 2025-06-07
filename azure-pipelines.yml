@@ -1,5 +1,5 @@
 pool:
-  name: ' Hawk Linux VM Pool'
+  name: 'Linux VM Pool'
 
 pr:
   autoCancel: true
@@ -88,3 +88,31 @@ stages:
               pushDockerImage: ${{ parameters.pushDockerImage }}
               continueOnPushError: true
           - template: templates/docker/clean-up.yml
+
+  - stage: SonarQubeScan
+    displayName: 'SonarQube - Code Quality'
+    dependsOn: TestBuild
+    condition: succeeded()
+    jobs:
+      - job: SonarQube
+        displayName: 'Run SonarQube Scan'
+        steps:
+          - template: templates/code-scanning/sonarqube-prepare.yml
+            parameters:
+              projectKey: 'com.myproject.scanner'
+              projectName: 'mysonarqubeproject'
+              projectVersion: '1.0'
+              sonarLoggingLevel: 'info'
+              sonarProfile: 'Sonar way'
+              sonarScanningMode: 'MSBuild'
+              sonarServiceConnection: 'sonarqube-service-connection'
+              sonarSources: '.'
+              additionalArgs: ''
+          
+          - template: templates/code-scanning/sonarqube-scan.yml
+            parameters:
+              sonarServiceConnection: 'sonarqube-service-connection'
+              sonarPublish: true
+              sonarBuildBreaker: true
+
+      
